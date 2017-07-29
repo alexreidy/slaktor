@@ -146,8 +146,6 @@ fun main(args: Array<String>) {
 
     val extractorAddr = Slaktor.spawn(Extractor::class.java)
     val transformerAddr = Slaktor.spawn(Transformer::class.java)
-    val loaderAddr = Slaktor.spawn(Loader::class.java)
-
-    Slaktor.sendTo(loaderAddr!!, StartMsg)
+    val loaderAddr = Slaktor.spawn(Loader::class.java, StartMsg)
 
 }

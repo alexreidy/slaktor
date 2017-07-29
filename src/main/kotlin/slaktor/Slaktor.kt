@@ -14,7 +14,7 @@ private data class ActorTypeInfo(
         var type: Class<*>,
         var config: ActorConfig,
         var factory: () -> Actor,
-        var instanceManager: CollectionManager<Actor>)
+        var instances: QueuedOpConcurrentCollection<Actor>)
 
 object Slaktor {
 
@@ -25,21 +25,25 @@ object Slaktor {
     private val actorsInGroup = ConcurrentHashMap<ActorGroup, MutableSet<Actor>>()
 
     fun register(actorType: Class<*>, actorConfig: ActorConfig, factory: () -> Actor) {
-        val instanceManager = CollectionManager<Actor>(HashSet<Actor>())
-        infoForActorType[actorType] = ActorTypeInfo(actorType, actorConfig, factory, instanceManager)
+        val instances = QueuedOpConcurrentCollection(HashSet<Actor>())
+        infoForActorType[actorType] = ActorTypeInfo(actorType, actorConfig, factory, instances)
     }
 
     /**
      * If the Actor type is registered, spawns an instance and returns the address.
+     * @param initMessage If present, this is sent to the actor before the actor is
+     * added to the public pool where other messages can reach it.
      */
-    // todo: should probably have a way to pass a config or initial message.
-    fun spawn(actorType: Class<*>): ActorAddress? {
+    fun spawn(actorType: Class<*>, initMessage: Any? = null): ActorAddress? {
         val actorTypeInfo = infoForActorType[actorType]
         if (actorTypeInfo == null) return null
+
         val actor = actorTypeInfo.factory.invoke()
+        if (initMessage != null) actor.inbox.addMessage(initMessage)
+
         actorsByAddress[actor.address] = actor
-        actorTypeInfo.instanceManager.inbox.addMessage(
-                CollectionManager.Messages.Add(listOf(actor)))
+        actorTypeInfo.instances.addAsync(listOf(actor))
+
         return actor.address
     }
 
@@ -52,17 +56,15 @@ object Slaktor {
     }
 
     fun broadcastToInstancesOf(actorType: Class<*>, message: Any) {
-        infoForActorType[actorType]?.instanceManager?.inbox?.addMessage(
-                CollectionManager.Messages.ForEach { actor ->
-                    (actor as Actor).inbox.addMessage(message)
-                })
+        infoForActorType[actorType]?.instances?.forEachAsync { actor ->
+            actor.inbox.addMessage(message)
+        }
     }
 
     fun broadcastToInstancesOf(actorType: Class<*>, messages: Iterable<Any>) {
-        infoForActorType[actorType]?.instanceManager?.inbox?.addMessage(
-                CollectionManager.Messages.ForEach { actor ->
-                    (actor as Actor).inbox.addMessages(messages)
-                })
+        infoForActorType[actorType]?.instances?.forEachAsync { actor ->
+            actor.inbox.addMessages(messages)
+        }
     }
 
     fun broadcastToGroup(actorGroup: ActorGroup, message: Any) {
