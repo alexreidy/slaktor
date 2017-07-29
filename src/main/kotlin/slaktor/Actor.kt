@@ -40,6 +40,7 @@ abstract class AbstractActor : Actor {
 
     constructor() {
         _inbox.messagesAddedEvent.addHandler {
+            if (!alive) return@addHandler
             ifActorThreadIsAvailable { complete ->
                 executor.execute {
                     var message: Any? = _inbox.nextMessage

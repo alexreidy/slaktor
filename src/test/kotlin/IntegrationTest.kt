@@ -1,6 +1,6 @@
 import slaktor.*
 
-data class DataRequest(val recordCount: Int, val sender: Actor)
+data class DataRequest(val recordCount: Int, val senderAddress: ActorAddress)
 
 data class DataRecord(val data: String)
 
@@ -16,9 +16,9 @@ class Extractor : AbstractActor() {
         if (message is DataRequest) {
             lastRequestedRecordCount = message.recordCount
             for (i in 1..message.recordCount) {
-                message.sender.inbox.addMessages(buffer)
+                Slaktor.sendAll(buffer, message.senderAddress)
                 buffer.clear()
-                message.sender.inbox.addMessage(DataRecord("$i"))
+                Slaktor.send(DataRecord("$i"), message.senderAddress)
                 Thread.sleep(5)
             }
         }
@@ -34,7 +34,9 @@ class Extractor : AbstractActor() {
     }
 
     override fun initialize() {}
-    override fun prepareToDie() {}
+    override fun prepareToDie() {
+        println("$this: It's quite alright; I've grown tired of living")
+    }
 }
 
 class Transformer : AbstractActor() {
@@ -43,10 +45,10 @@ class Transformer : AbstractActor() {
 
     var buffer = ArrayList<DataRecord>()
 
-    var destination: Actor? = null
+    var destinationAddr: ActorAddress? = null
 
     fun flushBuffer() {
-        destination?.inbox?.addMessages(buffer)
+        Slaktor.sendAll(buffer, destinationAddr!!)
         buffer.clear()
     }
 
@@ -59,10 +61,10 @@ class Transformer : AbstractActor() {
                 }
             }
             is DataRequest -> {
-                destination = message.sender
+                destinationAddr = message.senderAddress
                 extractorAddr?.let {
                     println("sending data request to $it")
-                    Slaktor.sendTo(it, DataRequest(message.recordCount, this))
+                    Slaktor.send(DataRequest(message.recordCount, this.address), it)
                 }
             }
         }
@@ -82,12 +84,16 @@ class Transformer : AbstractActor() {
                 println("!!!!!!! flushing buffer !!!!!!!")
                 flushBuffer()
                 timesBufferNotEmpty = 0
+                Slaktor.kill(extractorAddr!!)
             }
         }
     }
 
     override fun initialize() {}
-    override fun prepareToDie() {}
+    override fun prepareToDie() {
+        println("$this: I am not afraid of dying; any time will do; I don't mind")
+        Slaktor.kill(extractorAddr!!)
+    }
 
 }
 
@@ -97,7 +103,7 @@ class Loader : AbstractActor() {
 
     private fun askForData() {
         if (transformerAddr == null) return
-        Slaktor.sendTo(transformerAddr, DataRequest(5000, this))
+        Slaktor.send(DataRequest(500, this.address), transformerAddr)
     }
 
     private var recordsLoaded = 0
@@ -107,8 +113,9 @@ class Loader : AbstractActor() {
             is DataRecord -> {
                 recordsLoaded++
                 println("Loaded $message, number $recordsLoaded")
-                if (recordsLoaded == 5000) {
+                if (recordsLoaded >= 500) {
                     println("asking for more data")
+                    Slaktor.kill(transformerAddr!!)
                     askForData()
                     recordsLoaded = 0
                 }
@@ -125,29 +132,35 @@ class Loader : AbstractActor() {
     }
 
     override fun initialize() {}
-    override fun prepareToDie() {}
+    override fun prepareToDie() {
+        println("It's my life; it never ends")
+    }
 
 }
 
 fun main(args: Array<String>) {
 
-    Slaktor.register(Extractor::class.java, ActorConfig(), {
+    Slaktor.register(Extractor::class.java, {
         println("Creating extractor")
         Extractor()
     })
 
-    Slaktor.register(Transformer::class.java, ActorConfig(), {
+    Slaktor.register(Transformer::class.java, {
         println("Creating transformer")
         Transformer()
     })
 
-    Slaktor.register(Loader::class.java, ActorConfig(), {
+    Slaktor.register(Loader::class.java, {
         println("Creating loader")
         Loader()
     })
 
-    val extractorAddr = Slaktor.spawn(Extractor::class.java)
-    val transformerAddr = Slaktor.spawn(Transformer::class.java)
-    val loaderAddr = Slaktor.spawn(Loader::class.java, StartMsg)
+    val loaderAddr = Slaktor.spawn(Loader::class.java)
+    val l2 = Slaktor.spawn(Loader::class.java)
+    val l3 = Slaktor.spawn(Loader::class.java)
+    Thread.sleep(5000)
+    Slaktor.broadcastToInstancesOf(Loader::class.java, StartMsg)
+    Thread.sleep(10000)
+    Slaktor.killAllInstancesOf(Loader::class.java)
 
 }

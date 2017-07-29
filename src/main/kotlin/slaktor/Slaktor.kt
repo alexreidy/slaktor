@@ -6,11 +6,8 @@ data class ActorAddress(val address: String)
 
 data class ActorGroup(val id: String)
 
-class ActorConfig
-
 private data class ActorTypeInfo(
         var type: Class<*>,
-        var config: ActorConfig,
         var factory: () -> Actor,
         var instances: QueuedOpConcurrentCollection<Actor>)
 
@@ -20,11 +17,9 @@ object Slaktor {
 
     private val actorsByAddress = ConcurrentHashMap<ActorAddress, Actor>()
 
-    private val actorsInGroup = ConcurrentHashMap<ActorGroup, MutableSet<Actor>>()
-
-    fun register(actorType: Class<*>, actorConfig: ActorConfig, factory: () -> Actor) {
+    fun register(actorType: Class<*>, factory: () -> Actor) {
         val instances = QueuedOpConcurrentCollection(HashSet<Actor>())
-        infoForActorType[actorType] = ActorTypeInfo(actorType, actorConfig, factory, instances)
+        infoForActorType[actorType] = ActorTypeInfo(actorType, factory, instances)
     }
 
     /**
@@ -46,12 +41,31 @@ object Slaktor {
         return actor.address
     }
 
-    fun sendTo(actorAddress: ActorAddress, message: Any) {
-        actorsByAddress[actorAddress]?.inbox?.addMessage(message)
+    fun kill(actorAddress: ActorAddress) {
+        val actor = actorsByAddress[actorAddress] ?: return
+        actorsByAddress.remove(actorAddress)
+        val actorTypeInfo = infoForActorType[actor.javaClass] ?: return
+        actorTypeInfo.instances.removeAsync(listOf(actor))
+        actor.shutdown()
     }
 
-    fun sendTo(actorAddress: ActorAddress, messages: Iterable<Any>) {
-        actorsByAddress[actorAddress]?.inbox?.addMessages(messages)
+    fun killAllInstancesOf(actorType: Class<*>) {
+        val actorTypeInfo = infoForActorType[actorType] ?: return
+        val deadActors = ArrayList<Actor>()
+        actorTypeInfo.instances.forEachAsync {
+            it.shutdown()
+            actorsByAddress.remove(it.address)
+            deadActors.add(it)
+        }
+        actorTypeInfo.instances.removeAsync(deadActors)
+    }
+
+    fun send(message: Any, address: ActorAddress) {
+        actorsByAddress[address]?.inbox?.addMessage(message)
+    }
+
+    fun sendAll(messages: Iterable<Any>, address: ActorAddress) {
+        actorsByAddress[address]?.inbox?.addMessages(messages)
     }
 
     fun broadcastToInstancesOf(actorType: Class<*>, message: Any) {
@@ -60,21 +74,9 @@ object Slaktor {
         }
     }
 
-    fun broadcastToInstancesOf(actorType: Class<*>, messages: Iterable<Any>) {
+    fun broadcastAllToInstancesOf(actorType: Class<*>, messages: Iterable<Any>) {
         infoForActorType[actorType]?.instances?.forEachAsync { actor ->
             actor.inbox.addMessages(messages)
-        }
-    }
-
-    fun broadcastToGroup(actorGroup: ActorGroup, message: Any) {
-        actorsInGroup[actorGroup]?.forEach {
-            it.inbox.addMessage(message)
-        }
-    }
-
-    fun broadcastToGroup(actorGroup: ActorGroup, messages: Iterable<Any>) {
-        actorsInGroup[actorGroup]?.forEach {
-            it.inbox.addMessages(messages)
         }
     }
 

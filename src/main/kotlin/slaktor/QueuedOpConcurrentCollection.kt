@@ -4,6 +4,10 @@ class QueuedOpConcurrentCollection<T>(private val backingCollection: MutableColl
 
     private val collectionManager = CollectionManager(backingCollection)
 
+    init {
+        collectionManager.start()
+    }
+
     fun addAsync(things: Iterable<T>) {
         collectionManager.inbox.addMessage(
                 CollectionManager.Messages.Add(things))
@@ -17,6 +21,10 @@ class QueuedOpConcurrentCollection<T>(private val backingCollection: MutableColl
     fun forEachAsync(action: (T) -> Unit) {
         collectionManager.inbox.addMessage(
                 CollectionManager.Messages.ForEach { action(it as T) })
+    }
+
+    fun dispose() {
+        collectionManager.shutdown()
     }
 }
 
