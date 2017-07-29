@@ -1,5 +1,4 @@
-import slaktor.AbstractActor
-import slaktor.Actor
+import slaktor.*
 
 data class DataRequest(val recordCount: Int, val sender: Actor)
 
@@ -9,9 +8,16 @@ object StartMsg
 
 class Extractor : AbstractActor() {
 
+    var lastRequestedRecordCount = 0
+
+    val buffer = ArrayList<DataRecord>()
+
     override fun processMessage(message: Any) {
         if (message is DataRequest) {
+            lastRequestedRecordCount = message.recordCount
             for (i in 1..message.recordCount) {
+                message.sender.inbox.addMessages(buffer)
+                buffer.clear()
                 message.sender.inbox.addMessage(DataRecord("$i"))
                 Thread.sleep(5)
             }
@@ -20,6 +26,11 @@ class Extractor : AbstractActor() {
 
     override fun performIdleTask() {
         println("$this is idle")
+        if (lastRequestedRecordCount != 0) {
+            for (i in 1..100) {
+                buffer.add(DataRecord("$i"))
+            }
+        }
     }
 
     override fun prepareToDie() {}
@@ -28,7 +39,7 @@ class Extractor : AbstractActor() {
 
 class Transformer : AbstractActor() {
 
-    var extractor: Actor? = null
+    var extractorAddr = Slaktor.spawn(Extractor::class.java)
 
     var buffer = ArrayList<DataRecord>()
 
@@ -36,20 +47,23 @@ class Transformer : AbstractActor() {
 
     fun flushBuffer() {
         destination?.inbox?.addMessages(buffer)
-        buffer = ArrayList()
+        buffer.clear()
     }
 
     override fun processMessage(message: Any) {
         when (message) {
             is DataRecord -> {
                 buffer.add(message)
-                if (buffer.size > 500) {
-
+                if (buffer.size >= 500) {
+                    flushBuffer()
                 }
             }
             is DataRequest -> {
                 destination = message.sender
-                extractor?.inbox?.addMessage(DataRequest(message.recordCount, this))
+                extractorAddr?.let {
+                    println("sending data request to $it")
+                    Slaktor.sendTo(it, DataRequest(message.recordCount, this))
+                }
             }
         }
     }
@@ -59,6 +73,9 @@ class Transformer : AbstractActor() {
     override fun performIdleTask() {
         println("$this is idle")
 
+        if (buffer == null) {
+            println("it is null.")
+        }
         if (buffer.isNotEmpty()) {
             timesBufferNotEmpty++
             if (timesBufferNotEmpty > 2) {
@@ -75,10 +92,11 @@ class Transformer : AbstractActor() {
 
 class Loader : AbstractActor() {
 
-    var transformer: Actor? = null
+    val transformerAddr = Slaktor.spawn(Transformer::class.java)
 
     private fun askForData() {
-        transformer?.inbox?.addMessage(DataRequest(5000, this))
+        if (transformerAddr == null) return
+        Slaktor.sendTo(transformerAddr, DataRequest(5000, this))
     }
 
     private var recordsLoaded = 0
@@ -95,6 +113,7 @@ class Loader : AbstractActor() {
                 }
             }
             is StartMsg -> {
+                println("got START MSG!!!")
                 askForData()
             }
         }
@@ -110,14 +129,25 @@ class Loader : AbstractActor() {
 
 fun main(args: Array<String>) {
 
-    val extractor = Extractor()
+    Slaktor.register(Extractor::class.java, ActorConfig(), {
+        println("Creating extractor")
+        Extractor()
+    })
 
-    val transformer = Transformer()
-    transformer.extractor = extractor
+    Slaktor.register(Transformer::class.java, ActorConfig(), {
+        println("Creating transformer")
+        Transformer()
+    })
 
-    val loader = Loader()
-    loader.transformer = transformer
+    Slaktor.register(Loader::class.java, ActorConfig(), {
+        println("Creating loader")
+        Loader()
+    })
 
-    loader.inbox.addMessage(StartMsg)
+    val extractorAddr = Slaktor.spawn(Extractor::class.java)
+    val transformerAddr = Slaktor.spawn(Transformer::class.java)
+    val loaderAddr = Slaktor.spawn(Loader::class.java)
+
+    Slaktor.sendTo(loaderAddr!!, StartMsg)
 
 }
