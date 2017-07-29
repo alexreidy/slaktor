@@ -41,6 +41,8 @@ private class CollectionManager<T>(private val things: MutableCollection<T>) : A
 
     override fun performIdleTask() {}
 
+    override fun initialize() {}
+
     override fun prepareToDie() {}
 
     override fun processMessage(message: Any) {

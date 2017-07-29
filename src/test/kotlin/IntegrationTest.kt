@@ -33,8 +33,8 @@ class Extractor : AbstractActor() {
         }
     }
 
+    override fun initialize() {}
     override fun prepareToDie() {}
-
 }
 
 class Transformer : AbstractActor() {
@@ -86,6 +86,7 @@ class Transformer : AbstractActor() {
         }
     }
 
+    override fun initialize() {}
     override fun prepareToDie() {}
 
 }
@@ -123,6 +124,7 @@ class Loader : AbstractActor() {
         println("$this is idle")
     }
 
+    override fun initialize() {}
     override fun prepareToDie() {}
 
 }

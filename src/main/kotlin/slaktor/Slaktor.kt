@@ -2,8 +2,6 @@ package slaktor
 
 import java.util.concurrent.ConcurrentHashMap
 
-data class ActorType(val id: String)
-
 data class ActorAddress(val address: String)
 
 data class ActorGroup(val id: String)
@@ -39,6 +37,7 @@ object Slaktor {
         if (actorTypeInfo == null) return null
 
         val actor = actorTypeInfo.factory.invoke()
+        actor.start()
         if (initMessage != null) actor.inbox.addMessage(initMessage)
 
         actorsByAddress[actor.address] = actor

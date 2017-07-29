@@ -10,6 +10,8 @@ interface Actor {
 
     val inbox: Inbox<Any>
 
+    fun start()
+
     fun shutdown()
 
 }
@@ -25,6 +27,8 @@ abstract class AbstractActor : Actor {
     override val inbox: Inbox<Any> = _inbox
 
     private val actorThreadIsBusy = AtomicBoolean()
+
+    private var alive = false
 
     private inline fun ifActorThreadIsAvailable(action: (complete: () -> Unit) -> Unit) {
         val allowedToRun = actorThreadIsBusy.compareAndSet(false, true)
@@ -47,10 +51,23 @@ abstract class AbstractActor : Actor {
                 }
             }
         }
+    }
+
+    protected abstract fun processMessage(message: Any)
+
+    protected abstract fun performIdleTask()
+
+    protected abstract fun initialize()
+
+    protected abstract fun prepareToDie()
+
+    override final fun start() {
+        initialize()
+
+        alive = true
 
         thread {
-            Thread.sleep(1000) //todo
-            while (true) {
+            while (alive) {
                 ifActorThreadIsAvailable { complete ->
                     performIdleTask()
                     complete()
@@ -60,14 +77,9 @@ abstract class AbstractActor : Actor {
         }
     }
 
-    protected abstract fun processMessage(message: Any)
-
-    protected abstract fun performIdleTask()
-
-    protected abstract fun prepareToDie()
-
-    override fun shutdown() {
+    override final fun shutdown() {
         prepareToDie()
+        alive = false
     }
 
 }
