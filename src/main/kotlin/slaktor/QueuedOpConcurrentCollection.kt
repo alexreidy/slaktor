@@ -83,14 +83,14 @@ private class CollectionManager<T>(private val things: MutableCollection<T>) : A
             is Messages.Add -> {
                 for (thingToAdd in message.things) {
                     things.add(thingToAdd as T)
-                    message.finishedCallback.invoke()
                 }
+                message.finishedCallback.invoke()
             }
             is Messages.Remove -> {
                 for (thingToRemove in message.things) {
                     things.remove(thingToRemove)
-                    message.finishedCallback.invoke()
                 }
+                message.finishedCallback.invoke()
             }
         }
     }
