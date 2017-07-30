@@ -1,6 +1,7 @@
 package slaktor
 
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 data class ActorAddress(val address: String)
 
@@ -8,6 +9,8 @@ private data class ActorTypeInfo(
         var type: Class<*>,
         var factory: () -> Actor,
         var instances: QueuedOpConcurrentCollection<Actor>)
+
+internal val threadPool = Executors.newCachedThreadPool()
 
 object Slaktor {
 
@@ -18,6 +21,18 @@ object Slaktor {
     fun register(actorType: Class<*>, factory: () -> Actor) {
         val instances = QueuedOpConcurrentCollection(HashSet<Actor>())
         infoForActorType[actorType] = ActorTypeInfo(actorType, factory, instances)
+    }
+
+    fun shutdown() {
+        infoForActorType.forEach { entry ->
+            entry.value.instances.forEachAsync {
+                it.shutdown()
+            }
+            entry.value.instances.dispose()
+        }
+        infoForActorType.clear()
+        actorsByAddress.clear()
+        threadPool.shutdown()
     }
 
     /**

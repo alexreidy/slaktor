@@ -158,9 +158,12 @@ fun main(args: Array<String>) {
     val loaderAddr = Slaktor.spawn(Loader::class.java)
     val l2 = Slaktor.spawn(Loader::class.java)
     val l3 = Slaktor.spawn(Loader::class.java)
+
     Thread.sleep(5000)
     Slaktor.broadcastToInstancesOf(Loader::class.java, StartMsg)
-    Thread.sleep(10000)
-    Slaktor.killAllInstancesOf(Loader::class.java)
+    Thread.sleep(5000)
+    //Slaktor.killAllInstancesOf(Loader::class.java)
+
+    Slaktor.shutdown()
 
 }

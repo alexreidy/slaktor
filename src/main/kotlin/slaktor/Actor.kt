@@ -1,6 +1,5 @@
 package slaktor
 
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -15,8 +14,6 @@ interface Actor {
     fun shutdown()
 
 }
-
-private val executor = Executors.newCachedThreadPool()
 
 abstract class AbstractActor : Actor {
 
@@ -50,7 +47,7 @@ abstract class AbstractActor : Actor {
         _inbox.messagesAddedEvent.addHandler {
             if (!alive) return@addHandler
             ifActorThreadIsAvailable { complete ->
-                executor.execute {
+                threadPool.execute {
                     var message: Any? = _inbox.nextMessage
                     while (message != null) {
                         processMessage(message)
@@ -93,6 +90,7 @@ abstract class AbstractActor : Actor {
 
     override final fun shutdown() {
         synchronized(alive) {
+            if (!alive) return
             prepareToDie()
             alive = false
         }
