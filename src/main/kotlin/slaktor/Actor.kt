@@ -28,8 +28,16 @@ abstract class AbstractActor : Actor {
 
     private val actorThreadIsBusy = AtomicBoolean()
 
-    private var alive = false
+    @Volatile private var alive = false
 
+    private var initialized = false
+
+    /**
+     * Performs the action if the primary actor thread is available. The action will receive
+     * a `complete` callback that should be called when the action is finished.
+     * The thread will be unavailable to others until `complete()` is called.
+     * (This exists in case the action finishes on another thread.)
+     */
     private inline fun ifActorThreadIsAvailable(action: (complete: () -> Unit) -> Unit) {
         val allowedToRun = actorThreadIsBusy.compareAndSet(false, true)
         if (!allowedToRun) return
@@ -54,6 +62,9 @@ abstract class AbstractActor : Actor {
         }
     }
 
+    /**
+     * Called for each message received while the actor is alive.
+     */
     protected abstract fun processMessage(message: Any)
 
     protected abstract fun performIdleTask()
@@ -63,24 +74,28 @@ abstract class AbstractActor : Actor {
     protected abstract fun prepareToDie()
 
     override final fun start() {
-        initialize()
-
-        alive = true
-
-        thread {
-            while (alive) {
-                ifActorThreadIsAvailable { complete ->
-                    performIdleTask()
-                    complete()
+        synchronized(alive) {
+            if (initialized || alive) return
+            initialize()
+            initialized = true
+            alive = true
+            thread {
+                while (alive) {
+                    ifActorThreadIsAvailable { complete ->
+                        performIdleTask()
+                        complete()
+                    }
+                    Thread.sleep(1000)
                 }
-                Thread.sleep(1000)
             }
         }
     }
 
     override final fun shutdown() {
-        prepareToDie()
-        alive = false
+        synchronized(alive) {
+            prepareToDie()
+            alive = false
+        }
     }
 
 }

@@ -4,8 +4,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class ActorAddress(val address: String)
 
-data class ActorGroup(val id: String)
-
 private data class ActorTypeInfo(
         var type: Class<*>,
         var factory: () -> Actor,
