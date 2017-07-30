@@ -8,19 +8,34 @@ class QueuedOpConcurrentCollection<T>(private val backingCollection: MutableColl
         collectionManager.start()
     }
 
-    fun addAsync(things: Iterable<T>) {
+    /**
+     * Adds the things to the backing collection.
+     * @param then Called after the things are added.
+     */
+    fun addAsync(things: Iterable<T>, then: () -> Unit = {}) {
         collectionManager.inbox.addMessage(
-                CollectionManager.Messages.Add(things))
+                CollectionManager.Messages.Add(things,
+                        finishedCallback = then))
     }
 
-    fun removeAsync(things: Iterable<T>) {
+    /**
+     * Removes the things from the backing collection.
+     * @param then Called after the things are removed.
+     */
+    fun removeAsync(things: Iterable<T>, then: () -> Unit = {}) {
         collectionManager.inbox.addMessage(
-                CollectionManager.Messages.Remove(things))
+                CollectionManager.Messages.Remove(things,
+                        finishedCallback = then))
     }
 
-    fun forEachAsync(action: (T) -> Unit) {
+    /**
+     * Calls the given action for each element, passing the element to the action.
+     * @param then Called after performing the forEach.
+     */
+    fun forEachAsync(action: (T) -> Unit, then: () -> Unit = {}) {
         collectionManager.inbox.addMessage(
-                CollectionManager.Messages.ForEach { action(it as T) })
+                CollectionManager.Messages.ForEach({ action(it as T) },
+                        finishedCallback = then))
     }
 
     fun dispose() {
@@ -34,17 +49,23 @@ private class CollectionManager<T>(private val things: MutableCollection<T>) : A
         /**
          * Adds the things.
          */
-        data class Add(val things: Iterable<*>)
+        data class Add(
+                val things: Iterable<*>,
+                val finishedCallback: () -> Unit = {})
 
         /**
          * Removes the things.
          */
-        data class Remove(val things: Iterable<*>)
+        data class Remove(
+                val things: Iterable<*>,
+                val finishedCallback: () -> Unit = {})
 
         /**
          * Calls the given function for each element, passing the element.
          */
-        data class ForEach(val action: (Any?) -> Unit)
+        data class ForEach(
+                val action: (Any?) -> Unit,
+                val finishedCallback: () -> Unit = {})
     }
 
     override fun performIdleTask() {}
@@ -57,15 +78,18 @@ private class CollectionManager<T>(private val things: MutableCollection<T>) : A
         when (message) {
             is Messages.ForEach -> {
                 things.forEach { message.action.invoke(it) }
+                message.finishedCallback.invoke()
             }
             is Messages.Add -> {
                 for (thingToAdd in message.things) {
                     things.add(thingToAdd as T)
+                    message.finishedCallback.invoke()
                 }
             }
             is Messages.Remove -> {
                 for (thingToRemove in message.things) {
                     things.remove(thingToRemove)
+                    message.finishedCallback.invoke()
                 }
             }
         }

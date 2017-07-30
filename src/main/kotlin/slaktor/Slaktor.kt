@@ -23,12 +23,14 @@ object Slaktor {
         infoForActorType[actorType] = ActorTypeInfo(actorType, factory, instances)
     }
 
+    /**
+     * Kills all actors and frees resources.
+     */
     fun shutdown() {
         infoForActorType.forEach { entry ->
-            entry.value.instances.forEachAsync {
-                it.shutdown()
-            }
-            entry.value.instances.dispose()
+            entry.value.instances.forEachAsync({ it.shutdown() }, then = {
+                entry.value.instances.dispose()
+            })
         }
         infoForActorType.clear()
         actorsByAddress.clear()
@@ -65,11 +67,11 @@ object Slaktor {
     fun killAllInstancesOf(actorType: Class<*>) {
         val actorTypeInfo = infoForActorType[actorType] ?: return
         val deadActors = ArrayList<Actor>()
-        actorTypeInfo.instances.forEachAsync {
+        actorTypeInfo.instances.forEachAsync({
             it.shutdown()
             actorsByAddress.remove(it.address)
             deadActors.add(it)
-        }
+        })
         actorTypeInfo.instances.removeAsync(deadActors)
     }
 
@@ -82,15 +84,15 @@ object Slaktor {
     }
 
     fun broadcastToInstancesOf(actorType: Class<*>, message: Any) {
-        infoForActorType[actorType]?.instances?.forEachAsync { actor ->
+        infoForActorType[actorType]?.instances?.forEachAsync({ actor ->
             actor.inbox.addMessage(message)
-        }
+        })
     }
 
     fun broadcastAllToInstancesOf(actorType: Class<*>, messages: Iterable<Any>) {
-        infoForActorType[actorType]?.instances?.forEachAsync { actor ->
+        infoForActorType[actorType]?.instances?.forEachAsync({ actor ->
             actor.inbox.addMessages(messages)
-        }
+        })
     }
 
 }
