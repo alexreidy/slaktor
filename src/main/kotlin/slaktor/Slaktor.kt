@@ -71,8 +71,9 @@ object Slaktor {
             it.shutdown()
             actorsByAddress.remove(it.address)
             deadActors.add(it)
+        }, then = {
+            actorTypeInfo.instances.removeAsync(deadActors)
         })
-        actorTypeInfo.instances.removeAsync(deadActors)
     }
 
     fun send(message: Any, address: ActorAddress) {
