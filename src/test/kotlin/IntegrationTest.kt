@@ -1,4 +1,5 @@
 import slaktor.*
+import kotlin.concurrent.thread
 
 data class DataRequest(val recordCount: Int, val senderAddress: ActorAddress)
 
@@ -162,7 +163,7 @@ fun main(args: Array<String>) {
     Thread.sleep(5000)
     Slaktor.broadcastToInstancesOf(Loader::class.java, StartMsg)
     Thread.sleep(5000)
-    //Slaktor.killAllInstancesOf(Loader::class.java)
+    Slaktor.killAllInstancesOf(Loader::class.java)
 
     Slaktor.shutdown()
 

@@ -43,19 +43,23 @@ abstract class AbstractActor : Actor {
         }
     }
 
+    private inline fun processInboxIfActorThreadIsAvailable() {
+        ifActorThreadIsAvailable { complete ->
+            threadPool.execute {
+                var message: Any? = _inbox.nextMessage
+                while (message != null && alive) {
+                    processMessage(message)
+                    message = _inbox.nextMessage
+                }
+                complete()
+            }
+        }
+    }
+
     constructor() {
         _inbox.messagesAddedEvent.addHandler {
             if (!alive) return@addHandler
-            ifActorThreadIsAvailable { complete ->
-                threadPool.execute {
-                    var message: Any? = _inbox.nextMessage
-                    while (message != null) {
-                        processMessage(message)
-                        message = _inbox.nextMessage
-                    }
-                    complete()
-                }
-            }
+            processInboxIfActorThreadIsAvailable()
         }
     }
 
@@ -86,6 +90,7 @@ abstract class AbstractActor : Actor {
                     ifActorThreadIsAvailable { complete ->
                         performIdleTask()
                         complete()
+                        processInboxIfActorThreadIsAvailable()
                     }
                     Thread.sleep(millisToSleepBetweenIdleTaskAttempts)
                 }
