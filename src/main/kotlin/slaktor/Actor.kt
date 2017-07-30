@@ -68,7 +68,12 @@ abstract class AbstractActor : Actor {
 
     protected abstract fun initialize()
 
+    /**
+     * Called when alive and `shutdown()` is called.
+     */
     protected abstract fun prepareToDie()
+
+    protected var millisToSleepBetweenIdleTaskAttempts = 1000L
 
     override final fun start() {
         synchronized(alive) {
@@ -82,7 +87,7 @@ abstract class AbstractActor : Actor {
                         performIdleTask()
                         complete()
                     }
-                    Thread.sleep(1000)
+                    Thread.sleep(millisToSleepBetweenIdleTaskAttempts)
                 }
             }
         }
