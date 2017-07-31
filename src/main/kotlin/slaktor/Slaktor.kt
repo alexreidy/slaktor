@@ -45,14 +45,11 @@ object Slaktor {
     fun spawn(actorType: Class<*>, initMessage: Any? = null): ActorAddress? {
         val actorTypeInfo = infoForActorType[actorType]
         if (actorTypeInfo == null) return null
-
         val actor = actorTypeInfo.factory.invoke()
-        actor.start()
         if (initMessage != null) actor.inbox.addMessage(initMessage)
-
         actorsByAddress[actor.address] = actor
         actorTypeInfo.instances.addAsync(listOf(actor))
-
+        actor.start()
         return actor.address
     }
 
@@ -76,6 +73,7 @@ object Slaktor {
         })
     }
 
+    // todo: return "success" bool?
     fun send(message: Any, address: ActorAddress) {
         actorsByAddress[address]?.inbox?.addMessage(message)
     }

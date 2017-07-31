@@ -1,170 +1,139 @@
 import slaktor.*
-import kotlin.concurrent.thread
 
-data class DataRequest(val recordCount: Int, val senderAddress: ActorAddress)
+/*
+// Strange Kotlin bug:
+class Bar {
+    var busy = false
 
-data class DataRecord(val data: String)
+    inline fun ifNotBusyPerform(action: (complete: () -> Unit) -> Unit) {
+        if (busy) return
+        action.invoke {
+            busy = false // No crash if this line is commented out. (WTF)
+            println("complete callback executing")
+        }
+    }
 
-object StartMsg
+    fun ifNotBusySayHello() {
+        ifNotBusyPerform { complete ->
+            println("Hello!")
+            complete()
+        }
+    }
 
-class Extractor : AbstractActor() {
+    val myLock = Object()
 
-    var lastRequestedRecordCount = 0
-
-    val buffer = ArrayList<DataRecord>()
-
-    override fun processMessage(message: Any) {
-        if (message is DataRequest) {
-            lastRequestedRecordCount = message.recordCount
-            for (i in 1..message.recordCount) {
-                Slaktor.sendAll(buffer, message.senderAddress)
-                buffer.clear()
-                Slaktor.send(DataRecord("$i"), message.senderAddress)
-                Thread.sleep(5)
+    fun start() {
+        // No crash if this sync block is commented out.
+        // And no crash if it's replaced with another thread block.
+        synchronized(myLock) {
+            thread {
+                // No crash if the following code is not in this thread block.
+                // (Comment out the thread braces)
+                ifNotBusyPerform {
+                    ifNotBusySayHello() // No crash if this line is commented out.
+                }
             }
         }
+    }
+}*/
+
+class Extractor : AbstractActor() {
+    override fun processMessage(message: Any) {
     }
 
     override fun performIdleTask() {
-        println("$this is idle")
-        if (lastRequestedRecordCount != 0) {
-            for (i in 1..100) {
-                buffer.add(DataRecord("$i"))
-            }
-        }
     }
 
-    override fun initialize() {}
+    override fun initialize() {
+    }
+
     override fun prepareToDie() {
-        println("$this: It's quite alright; I've grown tired of living")
     }
 }
 
 class Transformer : AbstractActor() {
-
-    var extractorAddr = Slaktor.spawn(Extractor::class.java)
-
-    var buffer = ArrayList<DataRecord>()
-
-    var destinationAddr: ActorAddress? = null
-
-    fun flushBuffer() {
-        Slaktor.sendAll(buffer, destinationAddr!!)
-        buffer.clear()
-    }
-
     override fun processMessage(message: Any) {
-        when (message) {
-            is DataRecord -> {
-                buffer.add(message)
-                if (buffer.size >= 500) {
-                    flushBuffer()
-                }
-            }
-            is DataRequest -> {
-                destinationAddr = message.senderAddress
-                extractorAddr?.let {
-                    println("sending data request to $it")
-                    Slaktor.send(DataRequest(message.recordCount, this.address), it)
-                }
-            }
-        }
     }
-
-    private var timesBufferNotEmpty = 0
 
     override fun performIdleTask() {
-        println("$this is idle")
-
-        if (buffer == null) {
-            println("it is null.")
-        }
-        if (buffer.isNotEmpty()) {
-            timesBufferNotEmpty++
-            if (timesBufferNotEmpty > 2) {
-                println("!!!!!!! flushing buffer !!!!!!!")
-                flushBuffer()
-                timesBufferNotEmpty = 0
-                Slaktor.kill(extractorAddr!!)
-            }
-        }
     }
 
-    override fun initialize() {}
+    override fun initialize() {
+    }
+
     override fun prepareToDie() {
-        println("$this: I am not afraid of dying; any time will do; I don't mind")
-        Slaktor.kill(extractorAddr!!)
     }
-
 }
 
 class Loader : AbstractActor() {
 
-    val transformerAddr = Slaktor.spawn(Transformer::class.java)
+    enum class Status { READY, BUSY }
 
-    private fun askForData() {
-        if (transformerAddr == null) return
-        Slaktor.send(DataRequest(500, this.address), transformerAddr)
-    }
+    data class StatusRequest(val returnAddress: ActorAddress)
 
-    private var recordsLoaded = 0
+    data class StatusMsg(val sender: ActorAddress, val status: Status)
+
+    private var status = Status.READY
 
     override fun processMessage(message: Any) {
         when (message) {
-            is DataRecord -> {
-                recordsLoaded++
-                println("Loaded $message, number $recordsLoaded")
-                if (recordsLoaded >= 500) {
-                    println("asking for more data")
-                    Slaktor.kill(transformerAddr!!)
-                    askForData()
-                    recordsLoaded = 0
-                }
-            }
-            is StartMsg -> {
-                println("got START MSG!!!")
-                askForData()
+            is StatusRequest -> {
+                println("Got status request.")
+                Slaktor.send(StatusMsg(this.address, this.status), message.returnAddress)
             }
         }
     }
 
     override fun performIdleTask() {
-        println("$this is idle")
     }
 
-    override fun initialize() {}
+    override fun initialize() {
+    }
+
     override fun prepareToDie() {
-        println("It's my life; it never ends")
+    }
+}
+
+class Director : AbstractActor() {
+
+    private var extractor: ActorAddress? = null
+
+    private var transformer: ActorAddress? = null
+
+    override fun initialize() {
+        extractor = Slaktor.spawn(Extractor::class.java)
+        transformer = Slaktor.spawn(Transformer::class.java)
+        for (i in 1..3) {
+            Slaktor.spawn(Loader::class.java)
+        }
+
+        println("asking loaders for status")
+        Slaktor.broadcastToInstancesOf(Loader::class.java,
+                Loader.StatusRequest(returnAddress = this.address))
     }
 
+    override fun processMessage(message: Any) {
+        when (message) {
+            is Loader.StatusMsg -> {
+                println("${message.sender} is ${message.status}")
+            }
+        }
+    }
+
+    override fun performIdleTask() {
+    }
+
+
+
+    override fun prepareToDie() {
+    }
 }
 
 fun main(args: Array<String>) {
+    Slaktor.register(Director::class.java) { Director() }
+    Slaktor.register(Extractor::class.java) { Extractor() }
+    Slaktor.register(Transformer::class.java) { Transformer() }
+    Slaktor.register(Loader::class.java) { Loader() }
 
-    Slaktor.register(Extractor::class.java, {
-        println("Creating extractor")
-        Extractor()
-    })
-
-    Slaktor.register(Transformer::class.java, {
-        println("Creating transformer")
-        Transformer()
-    })
-
-    Slaktor.register(Loader::class.java, {
-        println("Creating loader")
-        Loader()
-    })
-
-    val loaderAddr = Slaktor.spawn(Loader::class.java)
-    val l2 = Slaktor.spawn(Loader::class.java)
-    val l3 = Slaktor.spawn(Loader::class.java)
-
-    Thread.sleep(5000)
-    Slaktor.broadcastToInstancesOf(Loader::class.java, StartMsg)
-    Thread.sleep(5000)
-    Slaktor.killAllInstancesOf(Loader::class.java)
-
-    Slaktor.shutdown()
-
+    Slaktor.spawn(Director::class.java)
 }
