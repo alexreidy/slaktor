@@ -39,7 +39,7 @@ publishing {
     publications {
         mypub(MavenPublication) {
             from components.java
-            version '0.1'
+            version '0.2'
         }
     }
 }
@@ -54,7 +54,7 @@ bintray {
         licenses = ['MIT']
         vcsUrl = 'https://github.com/alexreidy/slaktor.git'
         version {
-            name = 'alpha'
+            name = 'alpha2'
         }
     }
 }
