@@ -14,6 +14,8 @@ internal val threadPool = Executors.newCachedThreadPool()
 
 object Slaktor {
 
+    var log: Logger = ConsoleLogger()
+
     private val infoForActorType = ConcurrentHashMap<Class<*>, ActorTypeInfo>()
 
     private val actorsByAddress = ConcurrentHashMap<ActorAddress, Actor>()
@@ -28,6 +30,7 @@ object Slaktor {
      * Things may violently explode if you call methods on Slaktor after shutdown.
      */
     fun shutdown() {
+        log.info("Shutting down")
         infoForActorType.forEach { entry ->
             entry.value.instances.forEachAsync({ it.shutdown() }, then = {
                 entry.value.instances.dispose()
@@ -36,6 +39,7 @@ object Slaktor {
         infoForActorType.clear()
         actorsByAddress.clear()
         threadPool.shutdown()
+        log.info("Shutdown complete")
     }
 
     /**
