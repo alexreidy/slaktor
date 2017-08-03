@@ -27,15 +27,13 @@ abstract class AbstractActor : Actor {
 
     @Volatile private var alive = false
 
-    private var initialized = false
-
     /**
      * Performs the action if the primary actor thread is available. The action will receive
      * a `complete` callback that should be called when the action is finished.
      * The thread will be unavailable to others until `complete()` is called.
      * (This exists in case the action finishes on another thread.)
      */
-    private inline fun ifActorThreadIsAvailable(action: (complete: () -> Unit) -> Unit) {
+    private inline fun ifActorThreadIsAvailable(action: (freeActorThread: () -> Unit) -> Unit) {
         val allowedToRun = actorThreadIsBusy.compareAndSet(false, true)
         if (!allowedToRun) return
         action.invoke {
@@ -44,14 +42,14 @@ abstract class AbstractActor : Actor {
     }
 
     private inline fun processInboxIfActorThreadIsAvailable() {
-        ifActorThreadIsAvailable { complete ->
+        ifActorThreadIsAvailable { freeActorThread ->
             threadPool.execute {
                 var message: Any? = _inbox.nextMessage
-                while (message != null && alive) {
+                while (alive && message != null) {
                     processMessage(message)
                     message = _inbox.nextMessage
                 }
-                complete()
+                freeActorThread()
             }
         }
     }
@@ -70,10 +68,9 @@ abstract class AbstractActor : Actor {
 
     protected abstract fun performIdleTask()
 
-    protected abstract fun initialize()
-
     /**
      * Called when alive and `shutdown()` is called.
+     * This is where you get your affairs in order.
      */
     protected abstract fun prepareToDie()
 
@@ -81,15 +78,13 @@ abstract class AbstractActor : Actor {
 
     override final fun start() {
         synchronized(alive) {
-            if (initialized || alive) return
-            initialize()
-            initialized = true
+            if (alive) return
             alive = true
             thread {
                 while (alive) {
-                    ifActorThreadIsAvailable { complete ->
+                    ifActorThreadIsAvailable { freeActorThread ->
                         performIdleTask()
-                        complete()
+                        freeActorThread()
                         processInboxIfActorThreadIsAvailable()
                     }
                     Thread.sleep(millisToSleepBetweenIdleTaskAttempts)

@@ -1,18 +1,19 @@
 import slaktor.*
+import kotlin.concurrent.thread
 
 /*
 // Strange Kotlin bug:
-class Bar {
-    var busy = false
+class Foo {
+    var bar = false
 
     inline fun ifNotBusyPerform(action: (complete: () -> Unit) -> Unit) {
-        if (busy) return
         action.invoke {
-            busy = false // No crash if this line is commented out. (WTF)
+            bar = false // No crash if this line is commented out. (WTF)
             println("complete callback executing")
         }
     }
 
+    // No crash if this is made inline
     fun ifNotBusySayHello() {
         ifNotBusyPerform { complete ->
             println("Hello!")
@@ -31,6 +32,12 @@ class Bar {
                 // (Comment out the thread braces)
                 ifNotBusyPerform {
                     ifNotBusySayHello() // No crash if this line is commented out.
+                    /* No crash if the following replaces the above method call
+                    (as expected - there's no crash if the above method is made inline).
+                    ifNotBusyPerform { complete ->
+                        println("Hello!")
+                        complete()
+                    }*/
                 }
             }
         }
@@ -44,9 +51,6 @@ class Extractor : AbstractActor() {
     override fun performIdleTask() {
     }
 
-    override fun initialize() {
-    }
-
     override fun prepareToDie() {
     }
 }
@@ -56,9 +60,6 @@ class Transformer : AbstractActor() {
     }
 
     override fun performIdleTask() {
-    }
-
-    override fun initialize() {
     }
 
     override fun prepareToDie() {
@@ -87,20 +88,21 @@ class Loader : AbstractActor() {
     override fun performIdleTask() {
     }
 
-    override fun initialize() {
-    }
-
     override fun prepareToDie() {
     }
 }
 
-class Director : AbstractActor() {
+class Director : AbstractActor {
 
     private var extractor: ActorAddress? = null
 
     private var transformer: ActorAddress? = null
 
-    override fun initialize() {
+    constructor() {
+        initialize()
+    }
+
+    fun initialize() {
         extractor = Slaktor.spawn(Extractor::class.java)
         transformer = Slaktor.spawn(Transformer::class.java)
         for (i in 1..3) {

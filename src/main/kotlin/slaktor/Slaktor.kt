@@ -25,6 +25,7 @@ object Slaktor {
 
     /**
      * Kills all actors and frees resources.
+     * Things may violently explode if you call methods on Slaktor after shutdown.
      */
     fun shutdown() {
         infoForActorType.forEach { entry ->
@@ -39,16 +40,20 @@ object Slaktor {
 
     /**
      * If the Actor type is registered, spawns an instance and returns the address.
-     * @param initMessage If present, this is sent to the actor before the actor is
-     * added to the public pool where other messages can reach it.
+     * @param initMessage If present, this is sent to the actor before the actor is added to
+     * the public pool where other messages can reach it, and is thus under normal
+     * circumstances (i.e., no funny business in the factory or constructor) the first
+     * message an actor will receive.
      */
     fun spawn(actorType: Class<*>, initMessage: Any? = null): ActorAddress? {
         val actorTypeInfo = infoForActorType[actorType]
         if (actorTypeInfo == null) return null
         val actor = actorTypeInfo.factory.invoke()
         if (initMessage != null) actor.inbox.addMessage(initMessage)
+
         actorsByAddress[actor.address] = actor
         actorTypeInfo.instances.addAsync(listOf(actor))
+
         actor.start()
         return actor.address
     }
@@ -73,7 +78,6 @@ object Slaktor {
         })
     }
 
-    // todo: return "success" bool?
     fun send(message: Any, address: ActorAddress) {
         actorsByAddress[address]?.inbox?.addMessage(message)
     }
