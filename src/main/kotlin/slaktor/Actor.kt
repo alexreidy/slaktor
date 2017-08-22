@@ -81,6 +81,7 @@ abstract class AbstractActor : Actor {
             if (alive) return
             alive = true
             thread {
+                processInboxIfActorThreadIsAvailable()
                 while (alive) {
                     ifActorThreadIsAvailable { freeActorThread ->
                         performIdleTask()

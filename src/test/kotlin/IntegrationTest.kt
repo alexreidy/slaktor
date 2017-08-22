@@ -6,12 +6,13 @@ import kotlin.concurrent.thread
 class Foo {
     var bar = false
 
+    /*
     inline fun ifNotBusyPerform(action: (complete: () -> Unit) -> Unit) {
         action.invoke {
             bar = false // No crash if this line is commented out. (WTF)
             println("complete callback executing")
         }
-    }
+    }*/
 
     // No crash if this is made inline
     fun ifNotBusySayHello() {
@@ -40,6 +41,13 @@ class Foo {
                     }*/
                 }
             }
+        }
+    }
+
+    inline fun ifNotBusyPerform(action: (complete: () -> Unit) -> Unit) {
+        action.invoke {
+            bar = false // No crash if this line is commented out. (WTF)
+            println("complete callback executing")
         }
     }
 }*/
@@ -86,9 +94,11 @@ class Loader : AbstractActor() {
     }
 
     override fun performIdleTask() {
+        println("idling")
     }
 
     override fun prepareToDie() {
+        println("going down")
     }
 }
 
@@ -105,7 +115,7 @@ class Director : AbstractActor {
     fun initialize() {
         extractor = Slaktor.spawn(Extractor::class.java)
         transformer = Slaktor.spawn(Transformer::class.java)
-        for (i in 1..3) {
+        for (i in 1..35) {
             Slaktor.spawn(Loader::class.java)
         }
 
@@ -125,8 +135,6 @@ class Director : AbstractActor {
     override fun performIdleTask() {
     }
 
-
-
     override fun prepareToDie() {
     }
 }
@@ -138,4 +146,7 @@ fun main(args: Array<String>) {
     Slaktor.register(Loader::class.java) { Loader() }
 
     Slaktor.spawn(Director::class.java)
+
+    Thread.sleep(5000)
+    Slaktor.killAllInstancesOf(Loader::class.java)
 }
